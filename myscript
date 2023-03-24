@@ -1,0 +1,57 @@
+#!/bin/bash
+##############################################
+# Disclaimer: Run at your own risk.  This
+#  software should only add an SELinux Policy 
+#  and archive existing audit logs with in the
+#  same log directory, and clear the SELinux
+#  health status error in mdatp.
+# Author: Ryan Waters (Microsoft)
+##############################################
+
+echo "##############################################"
+echo "# Disclaimer: Run at your own risk.  This "
+echo "#  software should only add an SELinux Policy"
+echo "#  and archive existing	audit logs with	in the"
+echo "#  same	log directory, and clear the SELinux"
+echo "#  health status error in mdatp."
+echo "# Author: Ryan Waters (Microsoft)"
+echo "##############################################"
+read -p "Do you agree? [y/n]: " AGREE
+if [ ${AGREE} = "y" ]; then
+	echo "Adding SELinux Policy to allow mdatp audisp plugin events."
+	ausearch -c 'mdatp_audisp_pl' --raw | audit2allow -M my-mdatpaudisppl
+	semodule -i my-mdatpaudisppl.pp
+	echo "Done"
+	echo " "
+
+	cd /var/log/audit
+	echo "Stopping auditd and mdatp services to clear SELinux errors cleanly"
+	service auditd stop
+	echo "auditd stop sequence completed."
+	systemctl stop mdatp
+	echo "mdatp stop sequence completed."
+	echo " "
+
+	echo "Archiving audit entries to remove error while maintaining audit events."
+	gzip audit.*
+	echo "Archiving complete.  Your past audit logs are located in /var/log/audit and ending in .gz "
+	echo " "
+
+	echo "Restarting auditd and mdatp services..."
+	service auditd start
+	echo "auditd startup sequence completed."
+
+	systemctl start mdatp
+	echo "mdatp startup sequence completed."
+	echo " "
+	
+	echo "Will run mdatp health to show the status of the service, if the service is still unhealthy allow 1 minute and try again with command: mdatp health."
+	echo "If the issue still persist, then you may have a deeper SELinux issue and will be required to open a ticket up with the Linux Distribution Owner."
+	echo "Running in 10 seconds..."
+	sleep 10
+	mdatp health | grep health
+	echo " "
+	echo "If the health status is [ ] you are good to go, if it has a different error and the SELinux error is missing the script has done it's job, and you will need to troubleshoot the additional errors."
+else
+	echo "You did not agree, use 'y' to agree.  Re-run and try again."
+fi
